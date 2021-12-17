@@ -6,19 +6,19 @@ defmodule Calculattex do
   end
 
   # TODO: Remove logging
-  defmacro step(name, _desc \\ nil, do: block) when is_atom(name) do
-    IO.puts inspect(block)
-    IO.puts "---"
-    Macro.prewalk(block, fn {_, ctx, _} -> IO.puts(inspect(ctx))
-      other -> other end)
-    IO.puts ""
+  defmacro step(name, desc \\ nil, do: block) when is_atom(name) do
+    {:__block__, _, lines} = block
+    lines = lines |> Enum.map(&compile_line/1) |> Macro.escape
 
     fast_version = compile_fast_version(block)
     result = quote do
       def _fast_step(unquote(name), bindings) do
-        unquote(fast_version)
-        |> Code.eval_quoted(bindings)
-        |> elem(1)
+        Calculattex.Runner.eval_quoted(bindings, unquote(fast_version))
+      end
+
+      def _full_step(unquote(name), bindings) do
+        step = Calculattex.Step.build(unquote(name), unquote(desc), bindings)
+        Calculattex.Runner.eval_lines(step, unquote(lines))
       end
     end
 
@@ -37,11 +37,32 @@ defmodule Calculattex do
     {:var!, [], [{lhs, [], rhs}]}
   end
 
-  # TODO: Remove logging
-  def _compile_fast_version({lhs, _ctx, rhs}) do
-    # if ctx != [], do: IO.puts inspect(ctx)
-    {lhs, [], rhs}
+  def _compile_fast_version({op, _ctx, args}), do: {op, [], args}
+  def _compile_fast_version(other),            do: other
+
+  def _compile_substitution({var, _, nil}) when is_atom(var) do
+    quote do
+      inspect(Keyword.fetch!(var!(bindings), unquote(var)))
+    end
   end
 
-  def _compile_fast_version(other), do: other
+  def _compile_substitution({operator, _, [a1, a2]}) when operator in ~W[+ - / * **]a do
+    quote do
+      unquote(a1) <> unquote(" #{operator} ") <> unquote(a2)
+    end
+  end
+
+  def _compile_substitution(number) when is_number(number), do: inspect(number)
+  def _compile_substitution(other),                         do: other
+
+  def compile_line({:=, _, [{name, _, _}, predicate]} = line) when is_atom(name) do
+    {
+      name,
+      Macro.to_string(predicate),
+      Macro.postwalk(predicate, &_compile_substitution/1),
+      Macro.prewalk(line, &_compile_fast_version/1)
+    }
+  end
+
+  def compile_line(other), do: :error
 end

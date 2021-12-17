@@ -8,7 +8,7 @@ defmodule Support.SimpleCalculator do
   #   "divide result by 3"
   # ]
 
-  step :add, "Add both variables" do
+  step :add, "Applies the operations" do
     c = a + b
     d = c * 100
   end
