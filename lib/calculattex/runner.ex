@@ -24,8 +24,8 @@ defmodule Calculattex.Runner do
   end
 
   def process_line({name, formula, predicate_ast, line_ast}, bindings) do
-    results = Calculattex.Runner.eval_quoted(bindings, line_ast)
-    subs    = Calculattex.Runner.eval_substitution(bindings, predicate_ast)
+    results = eval_quoted(bindings, line_ast)
+    subs    = eval_substitution(bindings, predicate_ast)
     result  = Keyword.get(results, name)
 
     {
